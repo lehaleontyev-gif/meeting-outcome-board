@@ -1,1 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Meeting Outcome Board</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 900px; }
+    .row { display: flex; gap: 12px; margin-bottom: 12px; }
+    input { padding: 8px; flex: 1; }
+    button { padding: 8px 12px; cursor: pointer; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 10px 0; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #ccc; margin-left: 8px; font-size: 12px; }
+    .empty { border-color: #f2b8b5; background: #fff5f5; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Meeting Outcome Board</h1>
+  <p class="muted">MVP: список встреч + создание (пока без БД).</p>
+
+  <div class="row">
+    <input id="title" placeholder="Название встречи (обязательно)" />
+    <input id="goal" placeholder="Цель (необязательно)" />
+    <button id="createBtn">Создать</button>
+  </div>
+
+  <div id="status" class="muted"></div>
+  <div id="list"></div>
+
+  <script>
+    // ВАЖНО: пока API и фронт не на одном домене, надо будет поставить полный URL.
+    // Когда задеплоим вместе — будет работать как '/api/...'
+    const API_BASE = '/api';
+
+    const statusEl = document.getElementById('status');
+    const listEl = document.getElementById('list');
+
+    async function loadMeetings() {
+      statusEl.textContent = 'Загружаю встречи...';
+      try {
+        const res = await fetch(`${API_BASE}/meetings`);
+        const data = await res.json();
+        render(data.items || []);
+        statusEl.textContent = `Готово. Встреч: ${(data.items || []).length}`;
+      } catch (e) {
+        statusEl.textContent = 'Не могу достучаться до API. На деплое нужно будет указать API_BASE.';
+      }
+    }
+
+    function render(items) {
+      listEl.innerHTML = '';
+      for (const m of items) {
+        const div = document.createElement('div');
+        div.className = 'card' + (m.is_empty ? ' empty' : '');
+        div.innerHTML = `
+          <div>
+            <strong>${escapeHtml(m.title)}</strong>
+            <span class="badge">${m.status}</span>
+            ${m.is_empty ? '<span class="badge">пустая</span>' : ''}
+          </div>
+          <div class="muted">${escapeHtml(m.goal || '')}</div>
+          <div class="muted">
+            Decisions: ${m.outcomes?.decisions ?? 0},
+            Actions: ${m.outcomes?.actions ?? 0},
+            Questions: ${m.outcomes?.questions ?? 0}
+          </div>
+        `;
+        listEl.appendChild(div);
+      }
+    }
+
+    async function createMeeting() {
+      const title = document.getElementById('title').value.trim();
+      const goal = document.getElementById('goal').value.trim();
+      if (!title) return alert('Нужно указать название встречи');
+
+      statusEl.textContent = 'Создаю...';
+      const res = await fetch(`${API_BASE}/meetings`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ title, goal })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        statusEl.textContent = 'Ошибка: ' + (err.error || res.status);
+        return;
+      }
+
+      const created = await res.json();
+      statusEl.textContent = `Создано (id=${created.id}). Сейчас пока не сохраняем (без БД).`;
+      document.getElementById('title').value = '';
+      document.getElementById('goal').value = '';
+      // без БД список не обновится реальными данными — это ок для шага 1
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    document.getElementById('createBtn').addEventListener('click', createMeeting);
+    loadMeetings();
+  </script>
+</body>
+</html>
 
