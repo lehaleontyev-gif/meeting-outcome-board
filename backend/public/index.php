@@ -91,14 +91,21 @@ if ($path === '/api/meetings' && $method === 'POST') {
         exit;
     }
 
-    $meeting = [
-        'id' => random_int(1000, 9999),
-        'title' => $title,
-        'goal' => (string)($data['goal'] ?? ''),
-        'status' => 'draft',
-        'outcomes' => ['decisions' => 0, 'actions' => 0, 'questions' => 0],
-        'is_empty' => true
-    ];
+ensureSchema();
+$pdo = db();
+
+$stmt = $pdo->prepare(
+  "INSERT INTO meetings (title, goal, status)
+   VALUES (:title, :goal, 'draft')
+   RETURNING id"
+);
+
+$stmt->execute([
+  ':title' => $title,
+  ':goal' => (string)($data['goal'] ?? ''),
+]);
+
+$id = (int)$stmt->fetchColumn();
 
     http_response_code(201);
     echo json_encode($meeting, JSON_UNESCAPED_UNICODE);
