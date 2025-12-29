@@ -29,7 +29,10 @@
 
   <script>
     const API = '/api';
-
+    const flags = m.flags || [];
+    const flagBadges = flags.includes('actions_without_decisions')
+      ? '<span class="badge">⚠ actions без решения</span>'
+  : '';
     async function loadMeetings() {
       const res = await fetch(API + '/meetings');
       const data = await res.json();
