@@ -11,18 +11,7 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $path = rtrim($path, '/');
 if ($path === '') $path = '/';
 
-function ensureSchema(): void {
-    $pdo = db();
-    $pdo->exec("
-      CREATE TABLE IF NOT EXISTS meetings (
-        id SERIAL PRIMARY KEY,
-        title TEXT NOT NULL,
-        goal TEXT NOT NULL DEFAULT '',
-        status TEXT NOT NULL DEFAULT 'draft',
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      );
-    ");
-}
+
 
 // ---- Debug ----
 if ($path === '/api/debug/req') {
