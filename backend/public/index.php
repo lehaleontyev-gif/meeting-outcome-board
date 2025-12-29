@@ -18,8 +18,9 @@ if ($path === '/' && $method === 'GET') {
   <h1>Meeting Outcome Board</h1>
   <p>Backend is running ✅</p>
   <ul>
-    <li><a href="/api/health">/api/health</a></li>
-    <li><a href="/api/meetings">/api/meetings</a></li>
+    <li><a href="/api/health">Здоровье</a></li>
+    <li><a href="/api/meetings">Встречи</a></li>
+    <li><a href="/app.html">Открыть приложение</a></li>'
   </ul>
 </body>
 </html>';
@@ -99,7 +100,6 @@ if ($path === '/api/meetings' && $method === 'POST') {
     echo json_encode($meeting, JSON_UNESCAPED_UNICODE);
     exit;
 }
-echo '<li><a href="/app.html">Открыть приложение</a></li>';
 
 // ---- 404 ----
 http_response_code(404);
