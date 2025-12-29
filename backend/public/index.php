@@ -88,10 +88,10 @@ if ($path === '/api/meetings' && $method === 'POST') {
     echo json_encode($meeting, JSON_UNESCAPED_UNICODE);
     exit;
 }
+echo '<li><a href="/app.html">Открыть приложение</a></li>';
 
 // ---- 404 ----
 http_response_code(404);
 echo json_encode(['error' => 'not found', 'path' => $path], JSON_UNESCAPED_UNICODE);
-echo '<li><a href="/app.html">Открыть приложение</a></li>';
 
 ?>
