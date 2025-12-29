@@ -56,40 +56,28 @@ if ($path === '/api/health' && $method === 'GET') {
 }
 
 // ---- Meetings list ----
-if ($path === '/api/meetings' && $method === 'GET') {
-    $meetings = [
-        [
-            'id' => 1,
-            'title' => 'Daily sync',
-            'goal' => 'Align on next steps',
-            'status' => 'finished',
-            'outcomes' => ['decisions' => 1, 'actions' => 2, 'questions' => 0],
-            'is_empty' => false,
-            'flags' => []
-        ],
-        [
-            'id' => 2,
-            'title' => 'Discussion with vendor',
-            'goal' => 'Decide integration approach',
-            'status' => 'finished',
-            'outcomes' => ['decisions' => 0, 'actions' => 0, 'questions' => 0],
-            'is_empty' => true,
-            'flags' => []
-        ],
-        [
-              'id' => 3,
-              'title' => 'Refinement',
-              'goal' => 'Break down work',
-              'status' => 'finished',
-              'outcomes' => ['decisions' => 0, 'actions' => 5, 'questions' => 1],
-              'is_empty' => false,
-              'flags' => ['actions_without_decisions']
-        ],
-    ];
+ensureSchema();
+$pdo = db();
 
-    echo json_encode(['items' => $meetings], JSON_UNESCAPED_UNICODE);
-    exit;
+$rows = $pdo->query(
+  "SELECT id, title, goal, status FROM meetings ORDER BY id DESC"
+)->fetchAll();
+
+$items = [];
+foreach ($rows as $r) {
+  $items[] = [
+    'id' => (int)$r['id'],
+    'title' => $r['title'],
+    'goal' => $r['goal'],
+    'status' => $r['status'],
+    'outcomes' => ['decisions' => 0, 'actions' => 0, 'questions' => 0],
+    'is_empty' => true,
+    'flags' => ['empty'],
+  ];
 }
+
+echo json_encode(['items' => $items], JSON_UNESCAPED_UNICODE);
+exit;
 
 // ---- Create meeting ----
 if ($path === '/api/meetings' && $method === 'POST') {
