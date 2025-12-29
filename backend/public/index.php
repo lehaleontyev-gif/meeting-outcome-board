@@ -117,3 +117,4 @@ http_response_code(404);
 echo json_encode(['error' => 'not found', 'path' => $path], JSON_UNESCAPED_UNICODE);
 
 ?>
+
