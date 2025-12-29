@@ -47,7 +47,7 @@ if ($path === '/api/meetings' && $method === 'GET') {
             'goal' => 'Align on next steps',
             'status' => 'finished',
             'outcomes' => ['decisions' => 1, 'actions' => 2, 'questions' => 0],
-            'is_empty' => false
+            'is_empty' => false,
             'flags' => []
         ],
         [
@@ -56,18 +56,18 @@ if ($path === '/api/meetings' && $method === 'GET') {
             'goal' => 'Decide integration approach',
             'status' => 'finished',
             'outcomes' => ['decisions' => 0, 'actions' => 0, 'questions' => 0],
-            'is_empty' => true
+            'is_empty' => true,
             'flags' => []
         ],
         [
-  'id' => 3,
-  'title' => 'Refinement',
-  'goal' => 'Break down work',
-  'status' => 'finished',
-  'outcomes' => ['decisions' => 0, 'actions' => 5, 'questions' => 1],
-  'is_empty' => false,
-  'flags' => ['actions_without_decisions']
-],
+              'id' => 3,
+              'title' => 'Refinement',
+              'goal' => 'Break down work',
+              'status' => 'finished',
+              'outcomes' => ['decisions' => 0, 'actions' => 5, 'questions' => 1],
+              'is_empty' => false,
+              'flags' => ['actions_without_decisions']
+        ],
     ];
 
     echo json_encode(['items' => $meetings], JSON_UNESCAPED_UNICODE);
