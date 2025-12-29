@@ -1,5 +1,5 @@
 <?php
-
+ 
 // Красивый ответ для корня сайта
 if ($path === '/' && $method === 'GET') {
   header('Content-Type: text/html; charset=utf-8');
