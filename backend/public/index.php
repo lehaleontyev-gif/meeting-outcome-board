@@ -20,7 +20,7 @@ if ($path === '/' && $method === 'GET') {
   <ul>
     <li><a href="/api/health">Здоровье</a></li>
     <li><a href="/api/meetings">Встречи</a></li>
-    <li><a href="/app.html">Открыть приложение</a></li>'
+    <li><a href="/app.html">Открыть приложение</a></li>
   </ul>
 </body>
 </html>';
