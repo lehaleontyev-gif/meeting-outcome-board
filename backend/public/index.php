@@ -1,6 +1,22 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/db.php';
+
+function ensureSchema(): void {
+    $pdo = db();
+    $pdo->exec("
+      CREATE TABLE IF NOT EXISTS meetings (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        goal TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    ");
+}
+
+
 // ---- Базовые переменные запроса ----
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
