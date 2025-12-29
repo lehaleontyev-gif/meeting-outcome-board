@@ -21,7 +21,7 @@
   <div class="row">
     <input id="title" placeholder="Название встречи" />
     <input id="goal" placeholder="Цель" />
-    <button onclick="createMeeting()">Создать</button>
+    <button id="createBtn">Создать</button>
   </div>
 
   <div id="status" class="muted"></div>
@@ -29,59 +29,94 @@
 
   <script>
     const API = '/api';
-    const flags = m.flags || [];
-    const flagBadges = flags.includes('actions_without_decisions')
-      ? '<span class="badge">⚠ actions без решения</span>'
-  : '';
+
     async function loadMeetings() {
-      const res = await fetch(API + '/meetings');
-      const data = await res.json();
-      render(data.items || []);
+      const status = document.getElementById('status');
+      try {
+        status.textContent = 'Загружаю...';
+        const res = await fetch(API + '/meetings');
+        if (!res.ok) {
+          status.textContent = 'Ошибка API: ' + res.status;
+          return;
+        }
+        const data = await res.json();
+        const items = data.items || [];
+        status.textContent = `Ок: ${items.length} встреч`;
+        render(items);
+      } catch (e) {
+        status.textContent = 'Ошибка: ' + e.toString();
+      }
     }
 
     function render(items) {
       const list = document.getElementById('list');
       list.innerHTML = '';
+
       for (const m of items) {
+        const flags = m.flags || [];
+        const flagBadges = flags.includes('actions_without_decisions')
+          ? '<span class="badge">⚠ actions без решения</span>'
+          : '';
+
         const div = document.createElement('div');
         div.className = 'card' + (m.is_empty ? ' empty' : '');
+
         div.innerHTML = `
-          <strong>${escape(m.title)}</strong>
-          <span class="badge">${m.status}</span>
+          <strong>${escapeHtml(m.title)}</strong>
+          <span class="badge">${escapeHtml(m.status)}</span>
           ${m.is_empty ? '<span class="badge">пустая</span>' : ''}
-          <div class="muted">${escape(m.goal || '')}</div>
+          ${flagBadges}
+          <div class="muted">${escapeHtml(m.goal || '')}</div>
           <div class="muted">
-            Decisions: ${m.outcomes.decisions},
-            Actions: ${m.outcomes.actions},
-            Questions: ${m.outcomes.questions}
+            Decisions: ${Number(m.outcomes?.decisions ?? 0)},
+            Actions: ${Number(m.outcomes?.actions ?? 0)},
+            Questions: ${Number(m.outcomes?.questions ?? 0)}
           </div>
         `;
+
         list.appendChild(div);
       }
     }
 
     async function createMeeting() {
-      const title = document.getElementById('title').value.trim();
-      const goal = document.getElementById('goal').value.trim();
+      const status = document.getElementById('status');
+      const titleEl = document.getElementById('title');
+      const goalEl = document.getElementById('goal');
+
+      const title = titleEl.value.trim();
+      const goal = goalEl.value.trim();
+
       if (!title) return alert('Введите название');
 
-      const res = await fetch(API + '/meetings', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ title, goal })
-      });
+      try {
+        status.textContent = 'Создаю...';
+        const res = await fetch(API + '/meetings', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ title, goal })
+        });
 
-      document.getElementById('title').value = '';
-      document.getElementById('goal').value = '';
-      loadMeetings();
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          status.textContent = 'Ошибка создания: ' + (err.error || res.status);
+          return;
+        }
+
+        titleEl.value = '';
+        goalEl.value = '';
+        await loadMeetings();
+      } catch (e) {
+        status.textContent = 'Ошибка: ' + e.toString();
+      }
     }
 
-    function escape(s) {
+    function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])
       );
     }
 
+    document.getElementById('createBtn').addEventListener('click', createMeeting);
     loadMeetings();
   </script>
 </body>
