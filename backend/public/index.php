@@ -1,12 +1,15 @@
 <?php
 
-Echo "test";
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=utf-8');
+
 // Красивый ответ для корня сайта
 if ($path === '/' && $method === 'GET') {
   header('Content-Type: text/html; charset=utf-8');
   echo '<!doctype html><html><head><meta charset="utf-8"><title>Meeting Outcome Board</title></head><body style="font-family:Arial;max-width:900px;margin:24px;">';
   echo '<h1>Meeting Outcome Board</h1>';
-  echo '<p>Backend is running ✅</p>';
+  echo '<p>Backend is running </p>';
   echo '<ul>';
   echo '<li><a href="/api/health">/api/health</a></li>';
   echo '<li><a href="/api/meetings">/api/meetings</a></li>';
@@ -16,9 +19,6 @@ if ($path === '/' && $method === 'GET') {
 }
 
 
-declare(strict_types=1);
-
-header('Content-Type: application/json; charset=utf-8');
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
