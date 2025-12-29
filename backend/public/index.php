@@ -3,6 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 
+if ($path === '/api/debug/req') {
+  header('Content-Type: application/json; charset=utf-8');
+  echo json_encode([
+    'method' => $method,
+    'path' => $path,
+    'content_type' => $_SERVER['CONTENT_TYPE'] ?? null,
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
 function ensureSchema(): void {
     $pdo = db();
     $pdo->exec("
