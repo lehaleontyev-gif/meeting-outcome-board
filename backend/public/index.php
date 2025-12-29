@@ -6,7 +6,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
 // ---- Корень сайта (HTML) ----
-if ($path === '/' && $method === 'GET') {
+if (($path === '/' || $path === '/index.html') && $method === 'GET') {
     header('Content-Type: text/html; charset=utf-8');
     echo '<!doctype html>
 <html>
