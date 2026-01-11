@@ -29,6 +29,19 @@
 
   <script>
     const API = '/api';
+function scoreIcon(score) {
+  if (score < 25) return '🔴';
+  if (score < 50) return '🟠';
+  if (score < 75) return '🟡';
+  return '🟢';
+}
+
+function scoreLabel(score) {
+  if (score < 25) return 'плохо';
+  if (score < 50) return 'слабо';
+  if (score < 75) return 'норм';
+  return 'отлично';
+}
 
     async function loadMeetings() {
       const status = document.getElementById('status');
@@ -67,6 +80,8 @@ const qBadges = qFlags.length
   ? qFlags.slice(0, 2).map(f => `<span class="badge">${escapeHtml(f)}</span>`).join(' ')
   : '';
 
+const icon = scoreIcon(score);
+const label = scoreLabel(score);
         
         
 div.innerHTML = `
