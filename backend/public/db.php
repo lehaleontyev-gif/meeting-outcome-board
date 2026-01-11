@@ -74,4 +74,32 @@ function ensureSchema(): void {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
     ");
+    // --- migrations / alter for existing tables ---
+
+// decisions.owner
+$pdo->exec("
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='decisions' AND column_name='owner'
+  ) THEN
+    ALTER TABLE decisions ADD COLUMN owner TEXT NOT NULL DEFAULT '';
+  END IF;
+END $$;
+");
+
+// tasks.assignee
+$pdo->exec("
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='tasks' AND column_name='assignee'
+  ) THEN
+    ALTER TABLE tasks ADD COLUMN assignee TEXT NOT NULL DEFAULT '';
+  END IF;
+END $$;
+");
+
 }
