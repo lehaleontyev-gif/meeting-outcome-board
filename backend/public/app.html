@@ -62,17 +62,19 @@
         div.className = 'card' + (m.is_empty ? ' empty' : '');
 
         div.innerHTML = `
-          <strong>${escapeHtml(m.title)}</strong>
-          <span class="badge">${escapeHtml(m.status)}</span>
-          ${m.is_empty ? '<span class="badge">пустая</span>' : ''}
-          ${flagBadges}
-          <div class="muted">${escapeHtml(m.goal || '')}</div>
-          <div class="muted">
-            Decisions: ${Number(m.outcomes?.decisions ?? 0)},
-            Actions: ${Number(m.outcomes?.actions ?? 0)},
-            Questions: ${Number(m.outcomes?.questions ?? 0)}
-          </div>
-        `;
+  <a href="/meeting.html?id=${encodeURIComponent(m.id)}" style="text-decoration:none;color:inherit">
+    <strong>${escapeHtml(m.title)}</strong>
+  </a>
+  <span class="badge">${escapeHtml(m.status)}</span>
+  ${m.is_empty ? '<span class="badge">пустая</span>' : ''}
+  ${flagBadges}
+  <div class="muted">${escapeHtml(m.goal || '')}</div>
+  <div class="muted">
+    Decisions: ${Number(m.outcomes?.decisions ?? 0)},
+    Actions: ${Number(m.outcomes?.actions ?? 0)},
+    Questions: ${Number(m.outcomes?.questions ?? 0)}
+  </div>
+`;
 
         list.appendChild(div);
       }
