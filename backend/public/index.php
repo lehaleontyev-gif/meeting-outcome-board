@@ -239,33 +239,44 @@ if ($path === '/api/meetings' && $method === 'GET') {
       SELECT
         m.id, m.title, m.goal, m.status,
         (SELECT COUNT(*) FROM decisions d WHERE d.meeting_id = m.id) AS decisions_count,
-        (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id) AS tasks_count
+        (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id) AS tasks_count,
+        (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id AND t.due_date IS NOT NULL) AS tasks_with_due,
+        (SELECT COUNT(*) FROM decisions d
+          WHERE d.meeting_id = m.id AND COALESCE(NULLIF(d.owner,''), '') <> ''
+        ) AS decisions_with_owner
       FROM meetings m
       ORDER BY m.id DESC
     ")->fetchAll(PDO::FETCH_ASSOC);
 
     $items = [];
     foreach ($rows as $r) {
-        $dec = (int)$r['decisions_count'];
-        $tsk = (int)$r['tasks_count'];
+        $dc  = (int)$r['decisions_count'];
+        $tc  = (int)$r['tasks_count'];
+        $twd = (int)$r['tasks_with_due'];
+        $dwo = (int)$r['decisions_with_owner'];
+
+        $quality = calcMeetingQualityFromCounts($dc, $tc, $twd, $dwo, (string)$r['status']);
+
         $items[] = [
             'id' => (int)$r['id'],
             'title' => (string)$r['title'],
             'goal' => (string)$r['goal'],
             'status' => (string)$r['status'],
             'outcomes' => [
-                'decisions' => $dec,
-                'actions' => $tsk,
+                'decisions' => $dc,
+                'actions' => $tc,
                 'questions' => 0
             ],
-            'is_empty' => ($dec + $tsk) === 0,
-            'flags' => []
+            'is_empty' => ($dc + $tc) === 0,
+            'flags' => [],
+            'quality' => $quality,
         ];
     }
 
     echo json_encode(['items' => $items], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
 
 // ---- Meeting by id (полная карточка + решения + задачи) ----
 if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
@@ -286,12 +297,41 @@ if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
 
     $taskStmt = $pdo->prepare("SELECT id, title, assignee, due_date, status, created_at FROM tasks WHERE meeting_id = :id ORDER BY id DESC");
     $taskStmt->execute([':id' => $id]);
+$decisionsStmt = $pdo->prepare("SELECT * FROM decisions WHERE meeting_id = :id ORDER BY id DESC");
+$decisionsStmt->execute([':id' => $id]);
+$decisions = $decisionsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$tasksStmt = $pdo->prepare("SELECT * FROM tasks WHERE meeting_id = :id ORDER BY id DESC");
+$tasksStmt->execute([':id' => $id]);
+$tasks = $tasksStmt->fetchAll(PDO::FETCH_ASSOC);
+
+  $decisionsCount = count($decisions);
+$tasksCount = count($tasks);
+
+$tasksWithDue = 0;
+foreach ($tasks as $t) {
+  if (!empty($t['due_date'])) $tasksWithDue++;
+}
+
+$decisionsWithOwner = 0;
+foreach ($decisions as $d) {
+  if (!empty(trim((string)($d['owner'] ?? '')))) $decisionsWithOwner++;
+}
+
+$quality = calcMeetingQualityFromCounts(
+  $decisionsCount,
+  $tasksCount,
+  $tasksWithDue,
+  $decisionsWithOwner,
+  (string)($meeting['status'] ?? 'draft')
+);
 
     echo json_encode([
-        'meeting' => $meeting,
-        'decisions' => $decStmt->fetchAll(PDO::FETCH_ASSOC),
-        'tasks' => $taskStmt->fetchAll(PDO::FETCH_ASSOC),
-    ], JSON_UNESCAPED_UNICODE);
+  'meeting' => $meeting,
+  'decisions' => $decisions,
+  'tasks' => $tasks,
+  'quality' => $quality,
+], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
