@@ -7,6 +7,50 @@ require_once __DIR__ . '/db.php';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
+
+function clampInt(int $v, int $min, int $max): int {
+  return max($min, min($max, $v));
+}
+
+/**
+ * Возвращает ['score'=>int 0..100, 'flags'=>string[]]
+ */
+function calcMeetingQualityFromCounts(int $decisionsCount, int $tasksCount, int $tasksWithDue, int $decisionsWithOwner, string $meetingStatus = 'draft'): array {
+  $flags = [];
+
+  if (($decisionsCount + $tasksCount) === 0) $flags[] = 'empty_meeting';
+  if ($tasksCount > 8) $flags[] = 'too_many_tasks';
+
+  if ($tasksCount > 0) {
+    $ratio = $tasksWithDue / max(1, $tasksCount);
+    if ($ratio < 0.5) $flags[] = 'tasks_without_due_dates';
+  }
+
+  if ($decisionsCount > 0) {
+    $ratio = $decisionsWithOwner / max(1, $decisionsCount);
+    if ($ratio < 0.5) $flags[] = 'decisions_without_owner';
+  }
+
+  $score = 0;
+
+  // Outcome (0..60)
+  if ($decisionsCount > 0) $score += 15;
+  if ($tasksCount > 0) $score += 10;
+  if ($tasksCount > 0 && ($tasksWithDue / max(1,$tasksCount)) >= 0.5) $score += 10;
+  if ($decisionsCount > 0 && ($decisionsWithOwner / max(1,$decisionsCount)) >= 0.5) $score += 10;
+  if (($decisionsCount + $tasksCount) > 0) $score += 15;
+
+  // Hygiene penalties
+  if ($tasksCount > 8) $score -= 15;
+  if ($tasksCount > 0 && ($tasksWithDue / max(1,$tasksCount)) < 0.5) $score -= 10;
+  if ($decisionsCount > 0 && ($decisionsWithOwner / max(1,$decisionsCount)) < 0.5) $score -= 10;
+  if (($decisionsCount + $tasksCount) > 5 && $meetingStatus === 'draft') $score -= 5;
+
+  $score = clampInt($score, 0, 100);
+
+  return ['score' => $score, 'flags' => $flags];
+}
+
 // нормализация: /api/meetings/ -> /api/meetings
 $path = rtrim($path, '/');
 if ($path === '') $path = '/';
