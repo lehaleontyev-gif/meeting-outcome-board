@@ -34,6 +34,10 @@
     <div class="card">
       <div><strong id="title"></strong></div>
       <div class="muted" id="goal" style="margin-top:6px"></div>
+
+      <!-- ОЦЕНКА ВСТРЕЧИ -->
+      <div class="muted" id="quality" style="margin-top:10px"></div>
+
       <div class="muted" id="meta" style="margin-top:10px"></div>
     </div>
 
@@ -80,7 +84,7 @@
     }
 
     function esc(s) {
-      return String(s).replace(/[&<>"']/g, c =>
+      return String(s ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])
       );
     }
@@ -88,17 +92,31 @@
     async function apiJson(url, options) {
       const res = await fetch(url, options);
       const text = await res.text();
+
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch {}
+
       if (!res.ok) {
         throw new Error(`API ${res.status}: ${text.slice(0,200)}`);
       }
       return data;
     }
 
+    function renderQuality(q) {
+      const el = document.getElementById('quality');
+      const score = Number(q?.score ?? 0);
+      const flags = Array.isArray(q?.flags) ? q.flags : [];
+
+      const flagBadges = flags.length
+        ? ' ' + flags.slice(0, 4).map(f => `<span class="badge">${esc(f)}</span>`).join(' ')
+        : '';
+
+      el.innerHTML = `Оценка: <strong>${score}/100</strong>${flagBadges}`;
+    }
+
     function renderDecisions(items) {
       const el = document.getElementById('decisions');
-      if (!items.length) {
+      if (!items || !items.length) {
         el.innerHTML = '<div class="muted">Пока нет решений</div>';
         return;
       }
@@ -113,10 +131,11 @@
 
     function renderTasks(items) {
       const el = document.getElementById('tasks');
-      if (!items.length) {
+      if (!items || !items.length) {
         el.innerHTML = '<div class="muted">Пока нет действий</div>';
         return;
       }
+
       el.innerHTML = '<ul>' + items.map(t => `
         <li>
           <strong>${esc(t.title)}</strong>
@@ -124,22 +143,22 @@
           ${t.assignee ? `<span class="muted">— ${esc(t.assignee)}</span>` : ''}
           ${t.due_date ? `<span class="muted">• до ${esc(t.due_date)}</span>` : ''}
           <span class="muted">•</span>
-          <a href="#" data-id="${t.id}" data-next="done">done</a>
+          <a href="#" data-id="${esc(t.id)}" data-next="done">done</a>
           <span class="muted">|</span>
-          <a href="#" data-id="${t.id}" data-next="open">open</a>
+          <a href="#" data-id="${esc(t.id)}" data-next="open">open</a>
           <span class="muted">|</span>
-          <a href="#" data-id="${t.id}" data-next="in_progress">in_progress</a>
+          <a href="#" data-id="${esc(t.id)}" data-next="in_progress">in_progress</a>
         </li>
       `).join('') + '</ul>';
 
-      // клики по смене статуса
+      // клики по смене статуса (если backend это поддерживает)
       el.querySelectorAll('a[data-id]').forEach(a => {
         a.addEventListener('click', async (e) => {
           e.preventDefault();
-          const id = a.getAttribute('data-id');
+          const tid = a.getAttribute('data-id');
           const next = a.getAttribute('data-next');
           try {
-            await apiJson(`${API}/tasks/${id}`, {
+            await apiJson(`${API}/tasks/${encodeURIComponent(tid)}`, {
               method: 'PATCH',
               headers: {'Content-Type':'application/json'},
               body: JSON.stringify({ status: next })
@@ -159,21 +178,32 @@
 
       if (!id) {
         status.textContent = 'Ошибка: не указан id встречи. Пример: /meeting.html?id=1';
+        content.style.display = 'none';
         return;
       }
 
       try {
         status.textContent = 'Загружаю...';
-        const data = await apiJson(`${API}/meetings/${id}`);
+        const data = await apiJson(`${API}/meetings/${encodeURIComponent(id)}`);
+
+        if (!data || !data.meeting) {
+          status.textContent = 'Ошибка: API вернул неожиданный формат';
+          content.style.display = 'none';
+          return;
+        }
 
         const m = data.meeting;
+
         document.title = `Meeting #${m.id}`;
-        document.getElementById('title').innerHTML = esc(m.title);
-        document.getElementById('goal').innerHTML = esc(m.goal || '');
+        document.getElementById('title').textContent = m.title || '';
+        document.getElementById('goal').textContent = m.goal || '';
 
         const badge = document.getElementById('meetingStatus');
         badge.style.display = 'inline-block';
         badge.textContent = m.status || 'unknown';
+
+        // ОЦЕНКА
+        renderQuality(data.quality || { score: 0, flags: [] });
 
         document.getElementById('meta').textContent =
           `ID: ${m.id}` + (m.created_at ? ` • created_at: ${m.created_at}` : '');
@@ -185,21 +215,24 @@
         content.style.display = 'block';
       } catch (e) {
         status.textContent = 'Ошибка: ' + e.toString();
+        content.style.display = 'none';
       }
     }
 
     async function addDecision() {
       const id = getId();
+      if (!id) return alert('Нет id встречи');
+
       const title = document.getElementById('decisionTitle').value.trim();
       const owner = document.getElementById('decisionOwner').value.trim();
-      const status = document.getElementById('decisionStatus').value;
+      const st = document.getElementById('decisionStatus').value;
 
       if (!title) return alert('Введите текст решения');
 
-      await apiJson(`${API}/meetings/${id}/decisions`, {
+      await apiJson(`${API}/meetings/${encodeURIComponent(id)}/decisions`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ title, owner, status })
+        body: JSON.stringify({ title, owner, status: st })
       });
 
       document.getElementById('decisionTitle').value = '';
@@ -209,17 +242,19 @@
 
     async function addTask() {
       const id = getId();
+      if (!id) return alert('Нет id встречи');
+
       const title = document.getElementById('taskTitle').value.trim();
       const assignee = document.getElementById('taskAssignee').value.trim();
       const due_date = document.getElementById('taskDue').value || null;
-      const status = document.getElementById('taskStatus').value;
+      const st = document.getElementById('taskStatus').value;
 
       if (!title) return alert('Введите действие');
 
-      await apiJson(`${API}/meetings/${id}/tasks`, {
+      await apiJson(`${API}/meetings/${encodeURIComponent(id)}/tasks`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ title, assignee, due_date, status })
+        body: JSON.stringify({ title, assignee, due_date, status: st })
       });
 
       document.getElementById('taskTitle').value = '';
