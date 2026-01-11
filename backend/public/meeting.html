@@ -8,19 +8,24 @@
     body { font-family: Arial, sans-serif; margin: 24px; max-width: 900px; }
     .muted { color: #666; }
     .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
-    a { color: inherit; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #ccc; margin-left: 8px; font-size: 12px; }
-    .row { display:flex; gap: 12px; align-items:center; }
+    .row { display:flex; gap: 12px; align-items:center; flex-wrap: wrap; }
+    input, select { padding: 8px; }
+    button { padding: 8px 12px; cursor: pointer; }
+    ul { padding-left: 18px; }
+    li { margin: 8px 0; }
+    .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #ddd; font-size: 12px; margin-left: 6px; }
+    .link { text-decoration:none; }
   </style>
 </head>
 <body>
   <div class="row">
     <h1 style="margin:0">Встреча</h1>
-    <div id="badge" class="badge" style="display:none"></div>
+    <div id="meetingStatus" class="badge" style="display:none"></div>
   </div>
 
   <div class="muted" style="margin-top:6px">
-    <a href="/app.html">← назад к списку</a>
+    <a class="link" href="/app.html">← назад к списку</a>
   </div>
 
   <div id="status" class="muted" style="margin-top:12px"></div>
@@ -33,11 +38,35 @@
     </div>
 
     <div class="card">
-      <strong>Дальше здесь будут:</strong>
-      <ul class="muted">
-        <li>Решения (decisions)</li>
-        <li>Задачи (tasks)</li>
-      </ul>
+      <h3 style="margin-top:0">Решения</h3>
+      <div class="row">
+        <input id="decisionTitle" placeholder="Текст решения" style="flex:2" />
+        <input id="decisionOwner" placeholder="Ответственный (имя)" style="flex:1" />
+        <select id="decisionStatus">
+          <option value="active">active</option>
+          <option value="revoked">revoked</option>
+          <option value="superseded">superseded</option>
+        </select>
+        <button id="addDecisionBtn">Добавить</button>
+      </div>
+      <div id="decisions"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Действия (tasks)</h3>
+      <div class="row">
+        <input id="taskTitle" placeholder="Что сделать" style="flex:2" />
+        <input id="taskAssignee" placeholder="Кому" style="flex:1" />
+        <input id="taskDue" type="date" />
+        <select id="taskStatus">
+          <option value="open">open</option>
+          <option value="in_progress">in_progress</option>
+          <option value="done">done</option>
+          <option value="canceled">canceled</option>
+        </select>
+        <button id="addTaskBtn">Добавить</button>
+      </div>
+      <div id="tasks"></div>
     </div>
   </div>
 
@@ -56,6 +85,73 @@
       );
     }
 
+    async function apiJson(url, options) {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch {}
+      if (!res.ok) {
+        throw new Error(`API ${res.status}: ${text.slice(0,200)}`);
+      }
+      return data;
+    }
+
+    function renderDecisions(items) {
+      const el = document.getElementById('decisions');
+      if (!items.length) {
+        el.innerHTML = '<div class="muted">Пока нет решений</div>';
+        return;
+      }
+      el.innerHTML = '<ul>' + items.map(d => `
+        <li>
+          <strong>${esc(d.title)}</strong>
+          <span class="pill">${esc(d.status)}</span>
+          ${d.owner ? `<span class="muted">— ${esc(d.owner)}</span>` : ''}
+        </li>
+      `).join('') + '</ul>';
+    }
+
+    function renderTasks(items) {
+      const el = document.getElementById('tasks');
+      if (!items.length) {
+        el.innerHTML = '<div class="muted">Пока нет действий</div>';
+        return;
+      }
+      el.innerHTML = '<ul>' + items.map(t => `
+        <li>
+          <strong>${esc(t.title)}</strong>
+          <span class="pill">${esc(t.status)}</span>
+          ${t.assignee ? `<span class="muted">— ${esc(t.assignee)}</span>` : ''}
+          ${t.due_date ? `<span class="muted">• до ${esc(t.due_date)}</span>` : ''}
+          <span class="muted">•</span>
+          <a href="#" data-id="${t.id}" data-next="done">done</a>
+          <span class="muted">|</span>
+          <a href="#" data-id="${t.id}" data-next="open">open</a>
+          <span class="muted">|</span>
+          <a href="#" data-id="${t.id}" data-next="in_progress">in_progress</a>
+        </li>
+      `).join('') + '</ul>';
+
+      // клики по смене статуса
+      el.querySelectorAll('a[data-id]').forEach(a => {
+        a.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const id = a.getAttribute('data-id');
+          const next = a.getAttribute('data-next');
+          try {
+            await apiJson(`${API}/tasks/${id}`, {
+              method: 'PATCH',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ status: next })
+            });
+            await load();
+          } catch (err) {
+            alert(err.toString());
+          }
+        });
+      });
+    }
+
     async function load() {
       const status = document.getElementById('status');
       const content = document.getElementById('content');
@@ -68,26 +164,22 @@
 
       try {
         status.textContent = 'Загружаю...';
-        const res = await fetch(`${API}/meetings/${id}`);
-        const text = await res.text();
+        const data = await apiJson(`${API}/meetings/${id}`);
 
-        if (!res.ok) {
-          status.textContent = `Ошибка API: ${res.status} ${text.slice(0, 120)}`;
-          return;
-        }
-
-        const m = JSON.parse(text);
-
+        const m = data.meeting;
         document.title = `Meeting #${m.id}`;
         document.getElementById('title').innerHTML = esc(m.title);
         document.getElementById('goal').innerHTML = esc(m.goal || '');
 
-        const badge = document.getElementById('badge');
+        const badge = document.getElementById('meetingStatus');
         badge.style.display = 'inline-block';
         badge.textContent = m.status || 'unknown';
 
         document.getElementById('meta').textContent =
           `ID: ${m.id}` + (m.created_at ? ` • created_at: ${m.created_at}` : '');
+
+        renderDecisions(data.decisions || []);
+        renderTasks(data.tasks || []);
 
         status.textContent = 'Ок';
         content.style.display = 'block';
@@ -95,6 +187,49 @@
         status.textContent = 'Ошибка: ' + e.toString();
       }
     }
+
+    async function addDecision() {
+      const id = getId();
+      const title = document.getElementById('decisionTitle').value.trim();
+      const owner = document.getElementById('decisionOwner').value.trim();
+      const status = document.getElementById('decisionStatus').value;
+
+      if (!title) return alert('Введите текст решения');
+
+      await apiJson(`${API}/meetings/${id}/decisions`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title, owner, status })
+      });
+
+      document.getElementById('decisionTitle').value = '';
+      document.getElementById('decisionOwner').value = '';
+      await load();
+    }
+
+    async function addTask() {
+      const id = getId();
+      const title = document.getElementById('taskTitle').value.trim();
+      const assignee = document.getElementById('taskAssignee').value.trim();
+      const due_date = document.getElementById('taskDue').value || null;
+      const status = document.getElementById('taskStatus').value;
+
+      if (!title) return alert('Введите действие');
+
+      await apiJson(`${API}/meetings/${id}/tasks`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title, assignee, due_date, status })
+      });
+
+      document.getElementById('taskTitle').value = '';
+      document.getElementById('taskAssignee').value = '';
+      document.getElementById('taskDue').value = '';
+      await load();
+    }
+
+    document.getElementById('addDecisionBtn').addEventListener('click', () => addDecision().catch(e => alert(e.toString())));
+    document.getElementById('addTaskBtn').addEventListener('click', () => addTask().catch(e => alert(e.toString())));
 
     load();
   </script>
