@@ -93,9 +93,13 @@ div.innerHTML = `
   ${flagBadges}
   <div class="muted">${escapeHtml(m.goal || '')}</div>
 
-  <div class="muted">
-    Оценка: <strong>${score}/100</strong> ${qBadges}
-  </div>
+ <div class="muted">
+  ${icon}
+  Оценка: <strong>${score}/100</strong>
+  <span class="badge">${label}</span>
+  ${qBadges}
+</div>
+
 
   <div class="muted">
     Решения: ${Number(m.outcomes?.decisions ?? 0)},
