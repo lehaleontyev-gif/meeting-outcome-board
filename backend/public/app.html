@@ -17,7 +17,6 @@
 </head>
 <body>
   <h1>Ваши встречи</h1>
-<div class="muted">build: 2026-01-11-02</div>
   <div class="row">
     <input id="title" placeholder="Название встречи" />
     <input id="goal" placeholder="Цель" />
@@ -104,7 +103,7 @@ div.innerHTML = `
   <div class="muted">
     Решения: ${Number(m.outcomes?.decisions ?? 0)},
     Задачи: ${Number(m.outcomes?.actions ?? 0)},
-    Questions: ${Number(m.outcomes?.questions ?? 0)}
+    Вопросы: ${Number(m.outcomes?.questions ?? 0)}
   </div>
 `;
 
