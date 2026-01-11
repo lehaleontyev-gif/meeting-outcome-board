@@ -43,9 +43,9 @@
         <input id="decisionTitle" placeholder="Текст решения" style="flex:2" />
         <input id="decisionOwner" placeholder="Ответственный (имя)" style="flex:1" />
         <select id="decisionStatus">
-          <option value="active">active</option>
-          <option value="revoked">revoked</option>
-          <option value="superseded">superseded</option>
+          <option value="active">в работе</option>
+          <option value="revoked">отменено</option>
+          <option value="superseded">выполнено</option>
         </select>
         <button id="addDecisionBtn">Добавить</button>
       </div>
@@ -59,10 +59,10 @@
         <input id="taskAssignee" placeholder="Кому" style="flex:1" />
         <input id="taskDue" type="date" />
         <select id="taskStatus">
-          <option value="open">open</option>
-          <option value="in_progress">in_progress</option>
-          <option value="done">done</option>
-          <option value="canceled">canceled</option>
+          <option value="open">новое</option>
+          <option value="in_progress">в работе</option>
+          <option value="done">выполнено</option>
+          <option value="canceled">отменено</option>
         </select>
         <button id="addTaskBtn">Добавить</button>
       </div>
