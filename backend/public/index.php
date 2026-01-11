@@ -7,15 +7,9 @@ require_once __DIR__ . '/db.php';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
-
 // нормализация: /api/meetings/ -> /api/meetings
 $path = rtrim($path, '/');
 if ($path === '') $path = '/';
-
-if (preg_match('#^/api/meetings/\d+/(decisions|tasks)$#', $path) && $method === 'POST') {
-  error_log("HIT POST ".$path);
-}
-
 
 // ---- Debug ----
 if ($path === '/api/debug/req') {
@@ -59,112 +53,115 @@ if ($path === '/api/health' && $method === 'GET') {
     exit;
 }
 
-// ---- Meetings list ----
-if ($path === '/api/meetings' && $method === 'GET') {
-    ensureSchema();
-    $pdo = db();
+/**
+ * Безопасное чтение JSON тела запроса.
+ */
+function readJsonBody(): array {
+    $raw = file_get_contents('php://input') ?: '';
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
+}
 
-    $rows = $pdo->query("
-      SELECT
-        m.id, m.title, m.goal, m.status,
-        (SELECT COUNT(*) FROM decisions d WHERE d.meeting_id = m.id) AS decisions_count,
-        (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id) AS tasks_count
-      FROM meetings m
-      ORDER BY m.id DESC
-    ")->fetchAll(PDO::FETCH_ASSOC);
-
-    $items = [];
-    foreach ($rows as $r) {
-        $items[] = [
-            'id' => (int)$r['id'],
-            'title' => $r['title'],
-            'goal' => $r['goal'],
-            'status' => $r['status'],
-            'outcomes' => [
-                'decisions' => (int)$r['decisions_count'],
-                'actions' => (int)$r['tasks_count'],
-                'questions' => 0
-            ],
-            'is_empty' => ((int)$r['decisions_count'] + (int)$r['tasks_count']) === 0,
-            'flags' => []
-        ];
-    }
-
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['items' => $items], JSON_UNESCAPED_UNICODE);
+/**
+ * Быстрая выдача JSON-ошибки
+ */
+function jsonError(int $code, string $msg, array $extra = []): void {
+    http_response_code($code);
+    echo json_encode(array_merge(['error' => $msg], $extra), JSON_UNESCAPED_UNICODE);
     exit;
 }
-if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
-    ensureSchema();
-    $pdo = db();
-    $id = (int)$m[1];
 
-    $meeting = $pdo->prepare("SELECT * FROM meetings WHERE id = :id");
-    $meeting->execute([':id' => $id]);
-    $meeting = $meeting->fetch(PDO::FETCH_ASSOC);
+// ------------------------------------------------------------
+// ВАЖНО: сначала самые конкретные POST-роуты, потом GET.
+// ------------------------------------------------------------
 
-    if (!$meeting) {
-        http_response_code(404);
-        echo json_encode(['error' => 'not found']);
-        exit;
-    }
-
-    $decisions = $pdo->prepare("SELECT * FROM decisions WHERE meeting_id = :id ORDER BY id DESC");
-    $decisions->execute([':id' => $id]);
-
-    $tasks = $pdo->prepare("SELECT * FROM tasks WHERE meeting_id = :id ORDER BY id DESC");
-    $tasks->execute([':id' => $id]);
-
-    echo json_encode([
-        'meeting' => $meeting,
-        'decisions' => $decisions->fetchAll(PDO::FETCH_ASSOC),
-        'tasks' => $tasks->fetchAll(PDO::FETCH_ASSOC),
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+// ---- Add decision ----
 if (preg_match('#^/api/meetings/(\d+)/decisions$#', $path, $m) && $method === 'POST') {
     ensureSchema();
     $pdo = db();
-    $id = (int)$m[1];
+    $meetingId = (int)$m[1];
 
-    $data = json_decode(file_get_contents('php://input'), true);
-    $title = trim($data['title'] ?? '');
+    $data = readJsonBody();
 
-    if ($title === '') {
-        http_response_code(400);
-        echo json_encode(['error' => 'title required']);
-        exit;
+    $title = trim((string)($data['title'] ?? ''));
+    if ($title === '') jsonError(400, 'title required');
+
+    $owner = (string)($data['owner'] ?? '');
+    $status = (string)($data['status'] ?? 'active');
+
+    // защита от кривых статусов (ENUM)
+    if (!in_array($status, ['active', 'revoked', 'superseded'], true)) {
+        $status = 'active';
     }
 
     $stmt = $pdo->prepare("
       INSERT INTO decisions (meeting_id, title, owner, status)
-      VALUES (:id, :title, :owner, :status)
+      VALUES (:meeting_id, :title, :owner, :status)
+      RETURNING id
     ");
     $stmt->execute([
-        ':id' => $id,
+        ':meeting_id' => $meetingId,
         ':title' => $title,
-        ':owner' => $data['owner'] ?? '',
-        ':status' => $data['status'] ?? 'active',
+        ':owner' => $owner,
+        ':status' => $status,
     ]);
 
+    $id = (int)$stmt->fetchColumn();
+
     http_response_code(201);
-    echo json_encode(['ok' => true]);
+    echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+// ---- Add task ----
+if (preg_match('#^/api/meetings/(\d+)/tasks$#', $path, $m) && $method === 'POST') {
+    ensureSchema();
+    $pdo = db();
+    $meetingId = (int)$m[1];
+
+    $data = readJsonBody();
+
+    $title = trim((string)($data['title'] ?? ''));
+    if ($title === '') jsonError(400, 'title required');
+
+    $assignee = (string)($data['assignee'] ?? '');
+    $due_date = $data['due_date'] ?? null;
+    $status = (string)($data['status'] ?? 'open');
+
+    if (!in_array($status, ['open', 'in_progress', 'done', 'canceled'], true)) {
+        $status = 'open';
+    }
+
+    $stmt = $pdo->prepare("
+      INSERT INTO tasks (meeting_id, title, assignee, due_date, status)
+      VALUES (:meeting_id, :title, :assignee, :due_date, :status)
+      RETURNING id
+    ");
+    $stmt->execute([
+        ':meeting_id' => $meetingId,
+        ':title' => $title,
+        ':assignee' => $assignee,
+        ':due_date' => $due_date,
+        ':status' => $status,
+    ]);
+
+    $id = (int)$stmt->fetchColumn();
+
+    http_response_code(201);
+    echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // ---- Create meeting ----
 if ($path === '/api/meetings' && $method === 'POST') {
     ensureSchema();
     $pdo = db();
 
-    $raw = file_get_contents('php://input');
-    $data = json_decode($raw ?: '[]', true);
+    $data = readJsonBody();
 
     $title = trim((string)($data['title'] ?? ''));
-    if ($title === '') {
-        http_response_code(400);
-        echo json_encode(['error' => 'title is required'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
+    if ($title === '') jsonError(400, 'title is required');
+
     $goal = (string)($data['goal'] ?? '');
 
     $stmt = $pdo->prepare("
@@ -188,63 +185,69 @@ if ($path === '/api/meetings' && $method === 'POST') {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
-if (preg_match('#^/api/meetings/(\d+)/tasks$#', $path, $m) && $method === 'POST') {
+
+// ---- Meetings list ----
+if ($path === '/api/meetings' && $method === 'GET') {
     ensureSchema();
     $pdo = db();
-    $id = (int)$m[1];
 
-    $data = json_decode(file_get_contents('php://input'), true);
-    $title = trim($data['title'] ?? '');
+    $rows = $pdo->query("
+      SELECT
+        m.id, m.title, m.goal, m.status,
+        (SELECT COUNT(*) FROM decisions d WHERE d.meeting_id = m.id) AS decisions_count,
+        (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id) AS tasks_count
+      FROM meetings m
+      ORDER BY m.id DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
 
-    if ($title === '') {
-        http_response_code(400);
-        echo json_encode(['error' => 'title required']);
-        exit;
+    $items = [];
+    foreach ($rows as $r) {
+        $dec = (int)$r['decisions_count'];
+        $tsk = (int)$r['tasks_count'];
+        $items[] = [
+            'id' => (int)$r['id'],
+            'title' => (string)$r['title'],
+            'goal' => (string)$r['goal'],
+            'status' => (string)$r['status'],
+            'outcomes' => [
+                'decisions' => $dec,
+                'actions' => $tsk,
+                'questions' => 0
+            ],
+            'is_empty' => ($dec + $tsk) === 0,
+            'flags' => []
+        ];
     }
 
-    $stmt = $pdo->prepare("
-      INSERT INTO tasks (meeting_id, title, assignee, due_date, status)
-      VALUES (:id, :title, :assignee, :due_date, :status)
-    ");
-    $stmt->execute([
-        ':id' => $id,
-        ':title' => $title,
-        ':assignee' => $data['assignee'] ?? '',
-        ':due_date' => $data['due_date'] ?? null,
-        ':status' => $data['status'] ?? 'open',
-    ]);
-
-    http_response_code(201);
-    echo json_encode(['ok' => true]);
+    echo json_encode(['items' => $items], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-
-// ---- Meeting by id ----
+// ---- Meeting by id (полная карточка + решения + задачи) ----
 if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
     ensureSchema();
     $pdo = db();
-
     $id = (int)$m[1];
 
     $stmt = $pdo->prepare("SELECT id, title, goal, status, created_at FROM meetings WHERE id = :id");
     $stmt->execute([':id' => $id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $meeting = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$row) {
-        http_response_code(404);
-        echo json_encode(['error' => 'meeting not found', 'id' => $id], JSON_UNESCAPED_UNICODE);
-        exit;
+    if (!$meeting) {
+        jsonError(404, 'meeting not found', ['id' => $id]);
     }
 
-    echo json_encode([
-        'id' => (int)$row['id'],
-        'title' => (string)$row['title'],
-        'goal' => (string)$row['goal'],
-        'status' => (string)$row['status'],
-        'created_at' => (string)$row['created_at'],
-    ], JSON_UNESCAPED_UNICODE);
+    $decStmt = $pdo->prepare("SELECT id, title, owner, status, created_at FROM decisions WHERE meeting_id = :id ORDER BY id DESC");
+    $decStmt->execute([':id' => $id]);
 
+    $taskStmt = $pdo->prepare("SELECT id, title, assignee, due_date, status, created_at FROM tasks WHERE meeting_id = :id ORDER BY id DESC");
+    $taskStmt->execute([':id' => $id]);
+
+    echo json_encode([
+        'meeting' => $meeting,
+        'decisions' => $decStmt->fetchAll(PDO::FETCH_ASSOC),
+        'tasks' => $taskStmt->fetchAll(PDO::FETCH_ASSOC),
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
