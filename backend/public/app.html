@@ -60,8 +60,16 @@
 
         const div = document.createElement('div');
         div.className = 'card' + (m.is_empty ? ' empty' : '');
+const q = m.quality || { score: 0, flags: [] };
+const score = Number(q.score ?? 0);
+const qFlags = Array.isArray(q.flags) ? q.flags : [];
+const qBadges = qFlags.length
+  ? qFlags.slice(0, 2).map(f => `<span class="badge">${escapeHtml(f)}</span>`).join(' ')
+  : '';
 
-        div.innerHTML = `
+        
+        
+div.innerHTML = `
   <a href="/meeting.html?id=${encodeURIComponent(m.id)}" style="text-decoration:none;color:inherit">
     <strong>${escapeHtml(m.title)}</strong>
   </a>
@@ -69,12 +77,18 @@
   ${m.is_empty ? '<span class="badge">пустая</span>' : ''}
   ${flagBadges}
   <div class="muted">${escapeHtml(m.goal || '')}</div>
+
+  <div class="muted">
+    Оценка: <strong>${score}/100</strong> ${qBadges}
+  </div>
+
   <div class="muted">
     Решения: ${Number(m.outcomes?.decisions ?? 0)},
     Задачи: ${Number(m.outcomes?.actions ?? 0)},
-    Вопросы: ${Number(m.outcomes?.questions ?? 0)}
+    Questions: ${Number(m.outcomes?.questions ?? 0)}
   </div>
 `;
+
 
         list.appendChild(div);
       }
