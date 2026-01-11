@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Meeting</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 900px; }
+    .muted { color: #666; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
+    a { color: inherit; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #ccc; margin-left: 8px; font-size: 12px; }
+    .row { display:flex; gap: 12px; align-items:center; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <h1 style="margin:0">Встреча</h1>
+    <div id="badge" class="badge" style="display:none"></div>
+  </div>
+
+  <div class="muted" style="margin-top:6px">
+    <a href="/app.html">← назад к списку</a>
+  </div>
+
+  <div id="status" class="muted" style="margin-top:12px"></div>
+
+  <div id="content" style="display:none">
+    <div class="card">
+      <div><strong id="title"></strong></div>
+      <div class="muted" id="goal" style="margin-top:6px"></div>
+      <div class="muted" id="meta" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <strong>Дальше здесь будут:</strong>
+      <ul class="muted">
+        <li>Решения (decisions)</li>
+        <li>Задачи (tasks)</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api';
+
+    function getId() {
+      const p = new URLSearchParams(location.search);
+      const id = p.get('id');
+      return id && /^\d+$/.test(id) ? id : null;
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])
+      );
+    }
+
+    async function load() {
+      const status = document.getElementById('status');
+      const content = document.getElementById('content');
+      const id = getId();
+
+      if (!id) {
+        status.textContent = 'Ошибка: не указан id встречи. Пример: /meeting.html?id=1';
+        return;
+      }
+
+      try {
+        status.textContent = 'Загружаю...';
+        const res = await fetch(`${API}/meetings/${id}`);
+        const text = await res.text();
+
+        if (!res.ok) {
+          status.textContent = `Ошибка API: ${res.status} ${text.slice(0, 120)}`;
+          return;
+        }
+
+        const m = JSON.parse(text);
+
+        document.title = `Meeting #${m.id}`;
+        document.getElementById('title').innerHTML = esc(m.title);
+        document.getElementById('goal').innerHTML = esc(m.goal || '');
+
+        const badge = document.getElementById('badge');
+        badge.style.display = 'inline-block';
+        badge.textContent = m.status || 'unknown';
+
+        document.getElementById('meta').textContent =
+          `ID: ${m.id}` + (m.created_at ? ` • created_at: ${m.created_at}` : '');
+
+        status.textContent = 'Ок';
+        content.style.display = 'block';
+      } catch (e) {
+        status.textContent = 'Ошибка: ' + e.toString();
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
