@@ -60,27 +60,93 @@ if ($path === '/api/meetings' && $method === 'GET') {
     ensureSchema();
     $pdo = db();
 
-    $rows = $pdo->query(
-        "SELECT id, title, goal, status FROM meetings ORDER BY id DESC"
-    )->fetchAll();
+    $rows = $pdo->query("
+      SELECT
+        m.id, m.title, m.goal, m.status,
+        (SELECT COUNT(*) FROM decisions d WHERE d.meeting_id = m.id) AS decisions_count,
+        (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id) AS tasks_count
+      FROM meetings m
+      ORDER BY m.id DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
 
     $items = [];
     foreach ($rows as $r) {
         $items[] = [
             'id' => (int)$r['id'],
-            'title' => (string)$r['title'],
-            'goal' => (string)$r['goal'],
-            'status' => (string)$r['status'],
-            'outcomes' => ['decisions' => 0, 'actions' => 0, 'questions' => 0],
-            'is_empty' => true,
-            'flags' => ['empty'],
+            'title' => $r['title'],
+            'goal' => $r['goal'],
+            'status' => $r['status'],
+            'outcomes' => [
+                'decisions' => (int)$r['decisions_count'],
+                'actions' => (int)$r['tasks_count'],
+                'questions' => 0
+            ],
+            'is_empty' => ((int)$r['decisions_count'] + (int)$r['tasks_count']) === 0,
+            'flags' => []
         ];
     }
 
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['items' => $items], JSON_UNESCAPED_UNICODE);
     exit;
 }
+if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
+    ensureSchema();
+    $pdo = db();
+    $id = (int)$m[1];
 
+    $meeting = $pdo->prepare("SELECT * FROM meetings WHERE id = :id");
+    $meeting->execute([':id' => $id]);
+    $meeting = $meeting->fetch(PDO::FETCH_ASSOC);
+
+    if (!$meeting) {
+        http_response_code(404);
+        echo json_encode(['error' => 'not found']);
+        exit;
+    }
+
+    $decisions = $pdo->prepare("SELECT * FROM decisions WHERE meeting_id = :id ORDER BY id DESC");
+    $decisions->execute([':id' => $id]);
+
+    $tasks = $pdo->prepare("SELECT * FROM tasks WHERE meeting_id = :id ORDER BY id DESC");
+    $tasks->execute([':id' => $id]);
+
+    echo json_encode([
+        'meeting' => $meeting,
+        'decisions' => $decisions->fetchAll(PDO::FETCH_ASSOC),
+        'tasks' => $tasks->fetchAll(PDO::FETCH_ASSOC),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if (preg_match('#^/api/meetings/(\d+)/decisions$#', $path, $m) && $method === 'POST') {
+    ensureSchema();
+    $pdo = db();
+    $id = (int)$m[1];
+
+    $data = json_decode(file_get_contents('php://input'), true);
+    $title = trim($data['title'] ?? '');
+
+    if ($title === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'title required']);
+        exit;
+    }
+
+    $stmt = $pdo->prepare("
+      INSERT INTO decisions (meeting_id, title, owner, status)
+      VALUES (:id, :title, :owner, :status)
+    ");
+    $stmt->execute([
+        ':id' => $id,
+        ':title' => $title,
+        ':owner' => $data['owner'] ?? '',
+        ':status' => $data['status'] ?? 'active',
+    ]);
+
+    http_response_code(201);
+    echo json_encode(['ok' => true]);
+    exit;
+}
 // ---- Create meeting ----
 if ($path === '/api/meetings' && $method === 'POST') {
     ensureSchema();
@@ -118,6 +184,38 @@ if ($path === '/api/meetings' && $method === 'POST') {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+if (preg_match('#^/api/meetings/(\d+)/tasks$#', $path, $m) && $method === 'POST') {
+    ensureSchema();
+    $pdo = db();
+    $id = (int)$m[1];
+
+    $data = json_decode(file_get_contents('php://input'), true);
+    $title = trim($data['title'] ?? '');
+
+    if ($title === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'title required']);
+        exit;
+    }
+
+    $stmt = $pdo->prepare("
+      INSERT INTO tasks (meeting_id, title, assignee, due_date, status)
+      VALUES (:id, :title, :assignee, :due_date, :status)
+    ");
+    $stmt->execute([
+        ':id' => $id,
+        ':title' => $title,
+        ':assignee' => $data['assignee'] ?? '',
+        ':due_date' => $data['due_date'] ?? null,
+        ':status' => $data['status'] ?? 'open',
+    ]);
+
+    http_response_code(201);
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+
 // ---- Meeting by id ----
 if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
     ensureSchema();
