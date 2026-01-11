@@ -118,6 +118,33 @@ if ($path === '/api/meetings' && $method === 'POST') {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+// ---- Meeting by id ----
+if (preg_match('#^/api/meetings/(\d+)$#', $path, $m) && $method === 'GET') {
+    ensureSchema();
+    $pdo = db();
+
+    $id = (int)$m[1];
+
+    $stmt = $pdo->prepare("SELECT id, title, goal, status, created_at FROM meetings WHERE id = :id");
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        http_response_code(404);
+        echo json_encode(['error' => 'meeting not found', 'id' => $id], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode([
+        'id' => (int)$row['id'],
+        'title' => (string)$row['title'],
+        'goal' => (string)$row['goal'],
+        'status' => (string)$row['status'],
+        'created_at' => (string)$row['created_at'],
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
 
 // ---- 404 ----
 http_response_code(404);
