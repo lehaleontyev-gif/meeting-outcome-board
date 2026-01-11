@@ -7,10 +7,14 @@ require_once __DIR__ . '/db.php';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
+
 // нормализация: /api/meetings/ -> /api/meetings
 $path = rtrim($path, '/');
 if ($path === '') $path = '/';
 
+if (preg_match('#^/api/meetings/\d+/(decisions|tasks)$#', $path) && $method === 'POST') {
+  error_log("HIT POST ".$path);
+}
 
 
 // ---- Debug ----
